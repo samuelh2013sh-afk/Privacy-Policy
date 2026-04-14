@@ -15,6 +15,14 @@ on:
         description: 'Module to build'
         required: false
         default: 'app'
+      version_name:
+        description: 'Version name (e.g. 1.0.0)'
+        required: false
+        default: '1.0.0'
+      version_code:
+        description: 'Version code (positive integer)'
+        required: false
+        default: '1'
 
 jobs:
   build:
@@ -68,6 +76,32 @@ jobs:
           if [ ! -s keystore.jks ]; then
             echo "::error::Decoded keystore is empty. Check that KEYSTORE_BASE64 is a valid base64-encoded keystore file."
             exit 1
+          fi
+
+      - name: Set version
+        run: |
+          MODULE="${{ inputs.module }}"
+          VERSION_NAME="${{ inputs.version_name }}"
+          VERSION_CODE="${{ inputs.version_code }}"
+          # Validate version_name contains only safe characters
+          if ! echo "$VERSION_NAME" | grep -qE '^[0-9A-Za-z._-]+$'; then
+            echo "::error::Invalid version_name: must match [0-9A-Za-z._-]+"
+            exit 1
+          fi
+          # Validate version_code is a positive integer
+          if ! echo "$VERSION_CODE" | grep -qE '^[0-9]+$'; then
+            echo "::error::Invalid version_code: must be a positive integer"
+            exit 1
+          fi
+          # Update build.gradle.kts (Kotlin DSL)
+          if [ -f "$MODULE/build.gradle.kts" ]; then
+            sed -i "s/versionName = \"[^\"]*\"/versionName = \"$VERSION_NAME\"/" "$MODULE/build.gradle.kts"
+            sed -i "s/versionCode = [0-9]\+/versionCode = $VERSION_CODE/" "$MODULE/build.gradle.kts"
+          fi
+          # Update build.gradle (Groovy DSL)
+          if [ -f "$MODULE/build.gradle" ]; then
+            sed -i "s/versionName \"[^\"]*\"/versionName \"$VERSION_NAME\"/" "$MODULE/build.gradle"
+            sed -i "s/versionCode [0-9]\+/versionCode $VERSION_CODE/" "$MODULE/build.gradle"
           fi
 
       - name: Build APK
